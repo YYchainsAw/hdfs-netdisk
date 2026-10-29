@@ -1,0 +1,8 @@
+# Only activate with server profile for loopback development; never expose this profile publicly.
+server:
+  address: 127.0.0.1
+  port: 18084
+  servlet:
+    session:
+      cookie:
+        secure: false

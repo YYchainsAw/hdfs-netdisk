@@ -13,6 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 @SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.NONE,
     classes = LombokMybatisIntegrationTest.TestApplication.class,
     properties = {
         "spring.datasource.url=jdbc:h2:mem:netdisk_smoke;DB_CLOSE_DELAY=-1",
