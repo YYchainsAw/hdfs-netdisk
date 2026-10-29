@@ -50,7 +50,7 @@ class LombokMybatisIntegrationTest {
 
     @TestConfiguration(proxyBeanMethods = false)
     @EnableAutoConfiguration
-    @MapperScan(basePackageClasses = SmokeMapper.class, annotationClass = org.apache.ibatis.annotations.Mapper.class)
+    @MapperScan(basePackages = {"xyz.yychainsaw.backend.integration", "xyz.yychainsaw.backend.repository"}, annotationClass = org.apache.ibatis.annotations.Mapper.class)
     static class TestApplication {
     }
 }

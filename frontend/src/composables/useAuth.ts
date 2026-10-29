@@ -81,5 +81,6 @@ export function useAuth() {
     } finally { busy.value = false }
   }
 
-  return { user, busy, checking, error, login, logout }
+  function expire() { user.value = null; csrfToken.value = ''; error.value = '登录已过期，请重新登录。' }
+  return { user, busy, checking, error, login, logout, expire }
 }
