@@ -16,6 +16,8 @@ public class NdNode {
     private String name;
     private String nodeType;
     private String status;
+    private String storageKey;
+    private String sha256;
     private Long sizeBytes;
     private Long version;
     private LocalDateTime updatedAt;

@@ -20,7 +20,7 @@ class NodeFlowTest {
 
     @BeforeEach void init() {
         jdbc.execute("CREATE TABLE IF NOT EXISTS nd_user (id BIGINT PRIMARY KEY, username VARCHAR(64), password_hash VARCHAR(255), status VARCHAR(16))");
-        jdbc.execute("CREATE TABLE IF NOT EXISTS nd_node (id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL, parent_id BIGINT NOT NULL, name VARCHAR(191) NOT NULL, node_type VARCHAR(8) NOT NULL, status VARCHAR(16) NOT NULL, size_bytes BIGINT, version BIGINT NOT NULL DEFAULT 1, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id,parent_id,name))");
+        jdbc.execute("CREATE TABLE IF NOT EXISTS nd_node (id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL, parent_id BIGINT NOT NULL, name VARCHAR(191) NOT NULL, node_type VARCHAR(8) NOT NULL, status VARCHAR(16) NOT NULL, storage_key VARCHAR(255), sha256 CHAR(64), size_bytes BIGINT, version BIGINT NOT NULL DEFAULT 1, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id,parent_id,name))");
         jdbc.update("DELETE FROM nd_node"); jdbc.update("DELETE FROM nd_user");
         jdbc.update("INSERT INTO nd_user VALUES(1,'alice','hash','ACTIVE'),(2,'bob','hash','ACTIVE')");
     }
