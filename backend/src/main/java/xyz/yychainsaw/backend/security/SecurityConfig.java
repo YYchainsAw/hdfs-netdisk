@@ -31,7 +31,7 @@ public class SecurityConfig {
             .csrf(c -> c.csrfTokenRepository(tokens))
             .addFilterBefore(new OriginCheckFilter(), CsrfFilter.class)
             .addFilterBefore(new AccountStatusFilter(users), AuthorizationFilter.class)
-            .authorizeHttpRequests(a -> a.requestMatchers("/api/v1/auth/csrf", "/api/v1/auth/login").permitAll()
+            .authorizeHttpRequests(a -> a.requestMatchers("/api/v1/auth/csrf", "/api/v1/auth/login", "/api/v1/auth/register").permitAll()
                     .anyRequest().authenticated())
             .exceptionHandling(e -> e.authenticationEntryPoint((req, res, ex) -> {
                 res.setStatus(401); res.setContentType("application/json;charset=UTF-8");

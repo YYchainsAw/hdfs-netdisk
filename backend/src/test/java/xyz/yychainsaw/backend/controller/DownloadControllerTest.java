@@ -18,7 +18,7 @@ class DownloadControllerTest {
         DownloadMapper mapper = mock(DownloadMapper.class);
         HdfsStorage storage = mock(HdfsStorage.class);
         Authentication auth = mock(Authentication.class);
-        when(auth.getPrincipal()).thenReturn(new SessionUser("7", "alice"));
+        when(auth.getPrincipal()).thenReturn(new SessionUser("7", "alice", "test"));
         NdNode file = new NdNode();
         file.setName("成绩表.txt"); file.setStorageKey("/netdisk/users/7/abc"); file.setSizeBytes(3L);
         when(mapper.findVisibleFile(7, 12)).thenReturn(file);
@@ -37,7 +37,7 @@ class DownloadControllerTest {
         DownloadMapper mapper = mock(DownloadMapper.class);
         HdfsStorage storage = mock(HdfsStorage.class);
         Authentication auth = mock(Authentication.class);
-        when(auth.getPrincipal()).thenReturn(new SessionUser("8", "bob"));
+        when(auth.getPrincipal()).thenReturn(new SessionUser("8", "bob", "test"));
         NodeService.Problem ex = assertThrows(NodeService.Problem.class, () ->
             new DownloadController(mapper, storage).download("12", auth, new MockHttpServletResponse()));
         assertEquals(404, ex.status);
@@ -48,7 +48,7 @@ class DownloadControllerTest {
         DownloadMapper mapper = mock(DownloadMapper.class);
         HdfsStorage storage = mock(HdfsStorage.class);
         Authentication auth = mock(Authentication.class);
-        when(auth.getPrincipal()).thenReturn(new SessionUser("7", "alice"));
+        when(auth.getPrincipal()).thenReturn(new SessionUser("7", "alice", "test"));
         NdNode file = new NdNode(); file.setStorageKey("/netdisk/users/7/abc");
         when(mapper.findVisibleFile(7,12)).thenReturn(file);
         when(storage.open(anyString())).thenThrow(new IOException("unavailable"));

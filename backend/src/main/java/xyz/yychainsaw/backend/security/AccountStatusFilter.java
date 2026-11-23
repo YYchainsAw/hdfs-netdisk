@@ -23,7 +23,8 @@ final class AccountStatusFilter extends OncePerRequestFilter {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof SessionUser principal) {
             NdUser current = users.selectById(principal.id());
-            if (current == null || !"ACTIVE".equals(current.getStatus()) || !current.getUsername().equals(principal.username())) {
+            if (current == null || !"ACTIVE".equals(current.getStatus()) || !current.getUsername().equals(principal.username())
+                    || !CredentialStamp.of(current.getPasswordHash()).equals(principal.credentialStamp())) {
                 HttpSession session = request.getSession(false);
                 if (session != null) session.invalidate();
                 SecurityContextHolder.clearContext();

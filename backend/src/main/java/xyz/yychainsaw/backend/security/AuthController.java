@@ -70,7 +70,7 @@ public class AuthController {
         if (user == null || !matches || !"ACTIVE".equals(user.getStatus()))
             return error(401,"INVALID_CREDENTIALS","账号或密码错误");
 
-        SessionUser principal = new SessionUser(String.valueOf(user.getId()), user.getUsername());
+        SessionUser principal = new SessionUser(String.valueOf(user.getId()), user.getUsername(), CredentialStamp.of(user.getPasswordHash()));
         Authentication authentication = UsernamePasswordAuthenticationToken.authenticated(principal, null, List.of());
         sessions.onAuthentication(authentication, request, response);
         SecurityContext context = SecurityContextHolder.createEmptyContext();

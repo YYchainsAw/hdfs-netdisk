@@ -9,6 +9,12 @@ import xyz.yychainsaw.backend.model.NdNode;
 
 @Mapper
 public interface NdNodeMapper extends BaseMapper<NdNode> {
+    @Select("SELECT COALESCE(SUM(size_bytes),0) FROM nd_node WHERE user_id=#{userId} AND node_type='FILE' AND status='READY'")
+    java.math.BigDecimal sumReadyFileBytes(@Param("userId") long userId);
+
+    @Select("SELECT COUNT(*) FROM nd_node WHERE user_id=#{userId} AND node_type='FILE' AND status='READY'")
+    long countReadyFiles(@Param("userId") long userId);
+
     @Select("SELECT id FROM nd_user WHERE id = #{userId} AND status = 'ACTIVE' FOR UPDATE")
     Long lockOwner(@Param("userId") long userId);
 
