@@ -1,0 +1,20 @@
+PERF_CONTEXT size_mib=2048 available_memory_kib=4561196 hdfs_available_bytes=40746700800
+PERF_ISOLATION root=test-3113208e758b8ceb369177050c98dc63 container=netdisk-multipart-it-kSwvyO
+bf80aa004ae5f1d558aa56693fc697eb174a17f2cb46ff1d828385a000a26298  src/main/java/xyz/yychainsaw/backend/service/MultipartService.java
+3588bd311f4fd5d4e75f1bd378dc445933f23904f7149858c4c498537dfd4db2  src/main/java/xyz/yychainsaw/backend/service/MultipartGarbageCollector.java
+6b6ca366284b19ecca2fd35f141822c9d3b29e41a1975831c9d2ccd83534d096  src/main/java/xyz/yychainsaw/backend/storage/HdfsStorage.java
+b477134d154ecd273f09166a24877b2cb025b7bf8fa82b3b45dc6dd2cf5490ba  /tmp/netdisk-multipart-it.kSwvyO/multipart-schema.sql
+PERF scenario=single size_mib=2048 transfer_s=53.254 publish_s=21.737 download_s=12.986 upload_mib_s=38.46 download_mib_s=157.71 sha256=ok
+PERF scenario=parallel skipped=explicit
+2026-11-23T14:24:31.420+08:00  INFO 2103579 --- [backend] [ionShutdownHook] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+[INFO]
+[INFO] Results:
+[INFO]
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  01:44 min
+[INFO] Finished at: 2026-11-23T14:24:31+08:00
+[INFO] ------------------------------------------------------------------------

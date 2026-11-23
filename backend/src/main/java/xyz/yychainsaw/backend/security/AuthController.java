@@ -59,11 +59,13 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest body, HttpServletRequest request, HttpServletResponse response) {
         String client = request.getRemoteAddr();
-        if (!limiter.allow(client)) return error(429,"RATE_LIMITED","请求过于频繁，请稍后重试");
+        if (!limiter.allowClient(client)) return error(429,"RATE_LIMITED","请求过于频繁，请稍后重试");
         String username = body.username(); String raw = body.password();
         if (username == null || username.isBlank() || username.length() > 64 || raw == null
                 || raw.getBytes(StandardCharsets.UTF_8).length > 72) return error(401,"INVALID_CREDENTIALS","账号或密码错误");
         NdUser user = users.selectOne(Wrappers.<NdUser>lambdaQuery().eq(NdUser::getUsername, username));
+        String accountKey = user == null ? "unknown" : "id:" + user.getId();
+        if (!limiter.allowAccount(client, accountKey)) return error(429,"RATE_LIMITED","请求过于频繁，请稍后重试");
         String hash = user == null ? dummyHash : user.getPasswordHash();
         boolean matches = false;
         try { matches = passwords.matches(raw, hash); } catch (IllegalArgumentException ignored) { /* uniform rejection */ }
@@ -82,7 +84,7 @@ public class AuthController {
         tokens.saveToken(rawToken, request, response);
         new XorCsrfTokenRequestAttributeHandler().handle(request, response, () -> rawToken);
         CsrfToken masked = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
-        limiter.success(client);
+        limiter.success(client, accountKey);
         return ok(Map.of("user", Map.of("id", principal.id(), "username", principal.username()), "csrfToken", masked.getToken()));
     }
 
