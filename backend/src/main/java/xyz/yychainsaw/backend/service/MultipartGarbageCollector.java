@@ -81,14 +81,19 @@ public class MultipartGarbageCollector {
         }
     }
     private void removeObjects() {
-        var entries=db.queryForList("SELECT id,user_id,storage_key FROM nd_storage_gc WHERE status='PENDING' AND reason='ORPHAN' AND next_retry_at<=UTC_TIMESTAMP(3) ORDER BY id LIMIT 50");
+        var entries=db.queryForList("SELECT id,user_id,storage_key,reason FROM nd_storage_gc WHERE status='PENDING' AND reason IN ('ORPHAN','NODE_DELETED') AND next_retry_at<=UTC_TIMESTAMP(3) ORDER BY id LIMIT 50");
         for(var entry:entries) {
             long id=((Number)entry.get("id")).longValue(); String key=entry.get("storage_key").toString();
             // Only delete objects created by this implementation, never a user-supplied path.
             String token="[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
             if(!key.matches(Pattern.quote(tempRoot)+"/"+token+"/"+token) &&
                !key.matches(Pattern.quote(usersRoot)+"/[0-9]+/"+token)) continue;
-            Integer nodes=db.queryForObject("SELECT COUNT(*) FROM nd_node WHERE storage_key=?",Integer.class,key);
+            boolean nodeDeleted="NODE_DELETED".equals(entry.get("reason"));
+            long owner=((Number)entry.get("user_id")).longValue();
+            if(nodeDeleted && !key.matches(Pattern.quote(usersRoot)+"/"+owner+"/"+token)) continue;
+            Integer nodes=nodeDeleted
+                ? db.queryForObject("SELECT COUNT(*) FROM nd_node WHERE storage_key=? AND NOT (user_id=? AND status='DELETING')",Integer.class,key,owner)
+                : db.queryForObject("SELECT COUNT(*) FROM nd_node WHERE storage_key=?",Integer.class,key);
             Integer activeParts=db.queryForObject("SELECT COUNT(*) FROM nd_multipart_part p JOIN nd_multipart_upload u ON p.upload_id=u.id WHERE p.object_key=? AND u.status IN ('UPLOADING','FINALIZING')",Integer.class,key);
             if((nodes!=null && nodes>0) || (activeParts!=null && activeParts>0)) {
                 db.update("UPDATE nd_storage_gc SET next_retry_at=DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 1 DAY) WHERE id=?",id);
@@ -96,7 +101,10 @@ public class MultipartGarbageCollector {
             }
             try {
                 hdfs.delete(key);
-                db.update("UPDATE nd_storage_gc SET status='DONE' WHERE id=? AND status='PENDING'",id);
+                tx.executeWithoutResult(s -> {
+                    if(nodeDeleted) db.update("DELETE FROM nd_node WHERE user_id=? AND storage_key=? AND status='DELETING'",owner,key);
+                    db.update("UPDATE nd_storage_gc SET status='DONE' WHERE id=? AND status='PENDING'",id);
+                });
             } catch(IOException e) {
                 db.update("UPDATE nd_storage_gc SET retry_count=retry_count+1,next_retry_at=DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 1 HOUR) WHERE id=?",id);
                 LOG.warn("Could not remove an orphaned HDFS object; it will retry");

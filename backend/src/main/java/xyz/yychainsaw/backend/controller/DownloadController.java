@@ -20,6 +20,7 @@ import xyz.yychainsaw.backend.model.NdNode;
 import xyz.yychainsaw.backend.repository.DownloadMapper;
 import xyz.yychainsaw.backend.security.SessionUser;
 import xyz.yychainsaw.backend.service.NodeService;
+import xyz.yychainsaw.backend.service.StorageOperations;
 import xyz.yychainsaw.backend.storage.HdfsStorage;
 
 @RestController
@@ -34,6 +35,9 @@ public class DownloadController {
 
     @GetMapping("/{id}/content")
     public void download(@PathVariable String id, Authentication auth, HttpServletResponse response) throws IOException {
+        var guard = StorageOperations.LOCK.readLock();
+        guard.lock();
+        try {
         long userId = NodeService.id(((SessionUser) auth.getPrincipal()).id(), false);
         NdNode file = files.findVisibleFile(userId, NodeService.id(id, false));
         if (file == null) throw new NodeService.Problem(404, "NOT_FOUND", "文件不存在或不可访问");
@@ -51,6 +55,7 @@ public class DownloadController {
             response.setContentLengthLong(file.getSizeBytes());
             in.transferTo(response.getOutputStream());
         }
+        } finally { guard.unlock(); }
     }
 
     @ExceptionHandler(NodeService.Problem.class)
