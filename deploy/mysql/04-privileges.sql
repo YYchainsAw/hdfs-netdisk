@@ -1,0 +1,2 @@
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'netdisk_app'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE ON netdisk.* TO 'netdisk_app'@'%';

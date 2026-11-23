@@ -1,0 +1,9 @@
+.git
+**/node_modules
+**/target
+**/dist
+deploy/secrets
+**/.env
+**/.env.*
+**/*.pem
+**/*.key

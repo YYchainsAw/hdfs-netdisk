@@ -1,0 +1,13 @@
+<configuration>
+  <property><name>dfs.replication</name><value>1</value></property>
+  <property><name>dfs.namenode.name.dir</name><value>file:///data/name</value></property>
+  <property><name>dfs.datanode.data.dir</name><value>file:///data/data</value></property>
+  <property><name>dfs.namenode.rpc-bind-host</name><value>127.0.0.1</value></property>
+  <property><name>dfs.namenode.http-address</name><value>127.0.0.1:9870</value></property>
+  <property><name>dfs.datanode.address</name><value>127.0.0.1:9866</value></property>
+  <property><name>dfs.datanode.http.address</name><value>127.0.0.1:9864</value></property>
+  <property><name>dfs.datanode.ipc.address</name><value>127.0.0.1:9867</value></property>
+  <property><name>dfs.datanode.hostname</name><value>127.0.0.1</value></property>
+  <property><name>dfs.http.policy</name><value>HTTP_ONLY</value></property>
+  <property><name>dfs.webhdfs.enabled</name><value>true</value></property>
+</configuration>

@@ -1,0 +1,101 @@
+name: netdisk-course
+services:
+  mysql:
+    build:
+      context: ..
+      dockerfile: deploy/mysql/Dockerfile
+    command: ["--default-time-zone=+00:00"]
+    environment:
+      MYSQL_DATABASE: netdisk
+      MYSQL_ROOT_HOST: localhost
+      MYSQL_USER: netdisk_app
+      MYSQL_PASSWORD_FILE: /run/secrets/db_app
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_root
+    secrets: [db_app, db_root]
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$(cat /run/secrets/db_root) mysql -uroot -N -e \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='netdisk' AND table_name IN ('nd_user','nd_node','nd_upload','nd_storage_gc','nd_multipart_limits','nd_multipart_upload','nd_multipart_manifest','nd_multipart_part','nd_share')\" | grep -qx 9 && mysqladmin -h 127.0.0.1 ping >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 4s
+      retries: 36
+      start_period: 30s
+    restart: unless-stopped
+    mem_limit: 768m
+
+  hdfs:
+    build:
+      context: ..
+      dockerfile: deploy/hdfs/Dockerfile
+    volumes:
+      - hdfs_name:/data/name
+      - hdfs_data:/data/data
+    ports:
+      - "127.0.0.1:${NETDISK_PORT:-18090}:8080"
+    environment:
+      HADOOP_USER_NAME: hdfs
+      HADOOP_HEAPSIZE_MAX: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "hdfs dfs -test -d /netdisk/users && hdfs dfsadmin -safemode get | grep -q OFF"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+    restart: unless-stopped
+    mem_limit: 1200m
+
+  hdfs-init:
+    profiles: [init]
+    build:
+      context: ..
+      dockerfile: deploy/hdfs/Dockerfile
+    entrypoint: ["/bin/bash", "/opt/netdisk/init-hdfs.sh"]
+    environment:
+      HADOOP_USER_NAME: hdfs
+      HADOOP_HEAPSIZE_MAX: 256m
+    volumes:
+      - hdfs_name:/data/name
+      - hdfs_data:/data/data
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    network_mode: service:hdfs
+    depends_on:
+      mysql: {condition: service_healthy}
+      hdfs: {condition: service_healthy}
+    environment:
+      SPRING_PROFILES_ACTIVE: server
+      NETDISK_DB_URL: jdbc:mysql://mysql:3306/netdisk?useUnicode=true&characterEncoding=UTF-8&connectionTimeZone=UTC
+      NETDISK_DB_USERNAME: netdisk_app
+    volumes:
+      - app_lock:/run/lock
+      - ./secrets/db_app:/etc/netdisk/secrets/spring.datasource.password:ro
+    read_only: true
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    restart: unless-stopped
+    mem_limit: 640m
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
+    network_mode: service:hdfs
+    depends_on:
+      hdfs: {condition: service_healthy}
+      backend: {condition: service_started}
+    restart: unless-stopped
+    mem_limit: 128m
+
+secrets:
+  db_app: {file: ./secrets/db_app}
+  db_root: {file: ./secrets/db_root}
+volumes:
+  mysql_data:
+  hdfs_name:
+  hdfs_data:
+  app_lock:
+
