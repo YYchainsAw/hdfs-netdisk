@@ -13,9 +13,9 @@ function close() { if (!props.busy) emit('cancel') }
     <form class="form" @submit.prevent="emit('submit', mode === 'rename' ? name : undefined)">
       <h2>{{ mode === 'rename' ? '重命名' : '删除确认' }}</h2>
       <template v-if="mode === 'rename'"><label for="node-name">新名称</label><input id="node-name" v-model="name" required maxlength="382" :disabled="busy" /></template>
-      <p v-else class="detail">确定删除“{{ node.name }}”吗？此操作不可恢复。文件夹须为空，且不能有正在进行的上传任务。</p>
+      <p v-else class="detail">将“{{ node.name }}”移入回收站吗？{{ node.type === 'FOLDER' ? '文件夹内的内容也会一起移入。' : '' }}单次最多处理 1000 个项目；包含正在进行的上传任务、已单独删除的项目或正在清理的项目时，暂不能删除。</p>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
-      <div class="actions"><button type="button" :disabled="busy" @click="close">取消</button><button class="primary" :class="{danger: mode === 'delete'}" type="submit" :disabled="busy">{{ busy ? '处理中…' : mode === 'delete' ? '确认删除' : '保存' }}</button></div>
+      <div class="actions"><button type="button" :disabled="busy" @click="close">取消</button><button class="primary" :class="{danger: mode === 'delete'}" type="submit" :disabled="busy">{{ busy ? '处理中…' : mode === 'delete' ? '移入回收站' : '保存' }}</button></div>
     </form>
   </dialog>
 </template>

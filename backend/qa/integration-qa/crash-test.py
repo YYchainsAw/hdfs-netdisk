@@ -78,7 +78,7 @@ try:
     start()
     s=Session()
     data=os.urandom(2*1024*1024)
-    job=s.new('crash-during-chunk.bin',[data]); ident=job['id']
+    job=s.new('crash-during-chunk.txt',[data]); ident=job['id']
     cookie='; '.join(c.name+'='+c.value for c in s.cookies)
     conn=http.client.HTTPConnection('127.0.0.1',port,timeout=10)
     conn.putrequest('PUT',f'/api/v1/uploads/{ident}/chunks/0')
@@ -105,7 +105,7 @@ try:
 
     unit=os.urandom(8*1024*1024)
     chunks=[unit]*16
-    job=s.new('crash-during-merge.bin',chunks); ident=job['id']
+    job=s.new('crash-during-merge.txt',chunks); ident=job['id']
     for i,chunk in enumerate(chunks): s.put(ident,i,chunk)
     errors=[]
     def complete():

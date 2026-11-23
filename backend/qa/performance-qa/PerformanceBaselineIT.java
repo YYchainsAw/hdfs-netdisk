@@ -124,7 +124,7 @@ class PerformanceBaselineIT {
   String encoded=encoder.encode(password);
   db.update("INSERT INTO nd_user(username,password_hash,status) VALUES(?,?,'ACTIVE'),(?,?,'ACTIVE')",first,encoded,second,encoded);
   Session one=login(first,password), two=login(first,password), three=login(second,password);
-  Result single=uploadAndDownload(one,"single.bin",sizeMiB);
+  Result single=uploadAndDownload(one,"single.txt",sizeMiB);
   System.out.printf("PERF scenario=single size_mib=%d transfer_s=%.3f publish_s=%.3f download_s=%.3f upload_mib_s=%.2f download_mib_s=%.2f sha256=ok%n",sizeMiB,single.transfer(),single.publish(),single.download(),sizeMiB/single.transfer(),sizeMiB/single.download());
   if("YES".equals(System.getenv("NETDISK_PERF_SKIP_PARALLEL"))) {
    System.out.println("PERF scenario=parallel skipped=explicit");
@@ -132,9 +132,9 @@ class PerformanceBaselineIT {
   }
   var gate=new CountDownLatch(1); var pool=Executors.newFixedThreadPool(3);
   try {
-   var f1=pool.submit(()->{gate.await(); return uploadAndDownload(one,"parallel-a.bin",16);});
-   var f2=pool.submit(()->{gate.await(); return uploadAndDownload(two,"parallel-b.bin",16);});
-   var f3=pool.submit(()->{gate.await(); return uploadAndDownload(three,"parallel-c.bin",16);});
+   var f1=pool.submit(()->{gate.await(); return uploadAndDownload(one,"parallel-a.txt",16);});
+   var f2=pool.submit(()->{gate.await(); return uploadAndDownload(two,"parallel-b.txt",16);});
+   var f3=pool.submit(()->{gate.await(); return uploadAndDownload(three,"parallel-c.txt",16);});
    long start=System.nanoTime(); gate.countDown();
    Result r1=f1.get(),r2=f2.get(),r3=f3.get();
    double elapsed=seconds(start);

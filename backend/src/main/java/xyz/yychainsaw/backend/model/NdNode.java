@@ -20,5 +20,6 @@ public class NdNode {
     private String sha256;
     private Long sizeBytes;
     private Long version;
+    private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

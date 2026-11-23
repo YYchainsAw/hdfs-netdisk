@@ -74,7 +74,7 @@ class ReliabilityExtraIT {
     private HttpResponse<byte[]> put(Session s,Upload u,byte[] data,String sha) throws Exception { return send(s,"PUT","uploads/"+u.id()+"/chunks/0",data,"application/octet-stream",sha); }
     private HttpResponse<byte[]> complete(Session s,Upload u,String resolution) throws Exception { return json(s,"uploads/"+u.id()+"/complete","{\"resolution\":\""+resolution+"\"}"); }
     private HttpResponse<byte[]> createSmall(Session s,String request) throws Exception {
-        String body="{\"parentId\":\"0\",\"name\":\"limit-"+request+"\",\"sizeBytes\":1,\"requestId\":\""+request+"\",\"chunkHashes\":[\""+digest(new byte[]{1})+"\"]}";
+        String body="{\"parentId\":\"0\",\"name\":\"limit-"+request+".txt\",\"sizeBytes\":1,\"requestId\":\""+request+"\",\"chunkHashes\":[\""+digest(new byte[]{1})+"\"]}";
         return json(s,"uploads",body);
     }
     private HttpResponse<byte[]> deleteNode(Session s,long id) throws Exception {
@@ -88,7 +88,7 @@ class ReliabilityExtraIT {
         Session a=login("alice");
         byte[] bytes=new byte[1024*1024+31]; new Random(113).nextBytes(bytes);
         String sha=digest(bytes), request=UUID.randomUUID().toString();
-        String body="{\"parentId\":\"0\",\"name\":\"idempotent.bin\",\"sizeBytes\":"+bytes.length+",\"requestId\":\""+request+"\",\"chunkHashes\":[\""+sha+"\"]}";
+        String body="{\"parentId\":\"0\",\"name\":\"idempotent.txt\",\"sizeBytes\":"+bytes.length+",\"requestId\":\""+request+"\",\"chunkHashes\":[\""+sha+"\"]}";
         var pool=Executors.newFixedThreadPool(2); var gate=new CountDownLatch(1);
         String id;
         try {
@@ -118,21 +118,21 @@ class ReliabilityExtraIT {
         var repeat=complete(a,job,"FAIL"); assertEquals(200,repeat.statusCode(),text(repeat));
         assertTrue(text(repeat).contains("COMPLETED"));
         long node=db.queryForObject("SELECT node_id FROM nd_multipart_upload WHERE id=?",Long.class,id);
-        assertEquals(1,db.queryForObject("SELECT COUNT(*) FROM nd_node WHERE user_id=? AND name='idempotent.bin' AND status='READY'",Integer.class,alice));
+        assertEquals(1,db.queryForObject("SELECT COUNT(*) FROM nd_node WHERE user_id=? AND name='idempotent.txt' AND status='READY'",Integer.class,alice));
         assertArrayEquals(bytes,send(a,"GET","nodes/"+node+"/content",null,null,null).body());
         assertEquals(200,json(a,"uploads",body).statusCode(),"replayed create returns original completed task");
         var folder=json(a,"folders","{\"parentId\":\"0\",\"name\":\"active-folder\"}");
         assertEquals(201,folder.statusCode(),text(folder));
         long folderId=db.queryForObject("SELECT id FROM nd_node WHERE user_id=? AND name='active-folder'",Long.class,alice);
         String folderReq=UUID.randomUUID().toString();
-        String folderBody="{\"parentId\":\""+folderId+"\",\"name\":\"pending.bin\",\"sizeBytes\":"+bytes.length+",\"requestId\":\""+folderReq+"\",\"chunkHashes\":[\""+sha+"\"]}";
+        String folderBody="{\"parentId\":\""+folderId+"\",\"name\":\"pending.txt\",\"sizeBytes\":"+bytes.length+",\"requestId\":\""+folderReq+"\",\"chunkHashes\":[\""+sha+"\"]}";
         assertEquals(200,json(a,"uploads",folderBody).statusCode());
         String folderJob=db.queryForObject("SELECT id FROM nd_multipart_upload WHERE request_id=?",String.class,folderReq);
         assertEquals(409,deleteNode(a,folderId).statusCode(),"cannot delete a folder with an active upload");
         assertEquals(200,json(a,"uploads/"+folderJob+"/cancel","{}").statusCode());
         assertEquals(202,deleteNode(a,folderId).statusCode(),"folder can be deleted after task cancellation");
         assertEquals(409,send(a,"PUT","uploads/"+folderJob+"/chunks/0",bytes,"application/octet-stream",sha).statusCode());
-        Upload expired=create(a,"expired.bin",bytes);
+        Upload expired=create(a,"expired.txt",bytes);
         assertEquals(204,put(a,expired,bytes,expired.sha()).statusCode());
         String key=db.queryForObject("SELECT object_key FROM nd_multipart_part WHERE upload_id=? AND part_no=0",String.class,expired.id());
         assertTrue(storage.exists(key));

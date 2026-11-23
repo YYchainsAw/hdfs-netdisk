@@ -38,6 +38,8 @@ cp -- "$multipart_schema" "$task_dir/multipart-schema.sql"
 docker exec -i "$container" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --default-character-set=utf8mb4 netdisk_qa' < "$project_root/docs/design/database/schema.sql"
 docker exec -i "$container" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --default-character-set=utf8mb4 netdisk_qa' < "$project_root/docs/design/api/migration-upload.sql"
 docker exec -i "$container" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --default-character-set=utf8mb4 netdisk_qa' < "$task_dir/multipart-schema.sql"
+docker exec -i "$container" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --default-character-set=utf8mb4 netdisk_qa' < "$project_root/docs/design/api/trash-schema.sql"
+docker exec -i "$container" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --default-character-set=utf8mb4 netdisk_qa' < "$project_root/docs/design/api/share-schema.sql"
 cp -a "$backend_src" "$task_dir/project"
 gc_source="$task_dir/project/src/main/java/xyz/yychainsaw/backend/service/MultipartGarbageCollector.java"
 grep -qF '/run/lock/netdisk-multipart.lock' "$gc_source" || { echo 'Expected production lock path not found; refusing to test'; exit 3; }

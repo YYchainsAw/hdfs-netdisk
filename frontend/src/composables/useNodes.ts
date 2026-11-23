@@ -1,18 +1,19 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 
-export interface NodeItem { id: string; parentId: string; name: string; type: 'FILE' | 'FOLDER'; sizeBytes: string | null; version: string; updatedAt: string }
+export interface NodeItem { id: string; parentId: string; name: string; type: 'FILE' | 'FOLDER'; sizeBytes: string | null; version: string; updatedAt: string; createdAt?: string | null }
 interface Listing { items: NodeItem[]; page: number; pageSize: number; hasMore: boolean }
 interface Envelope<T> { data: T }
-class ApiError extends Error { constructor(public status: number, message: string) { super(message) } }
+class ApiError extends Error { constructor(public status: number, message: string, public code = '') { super(message) } }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let res: Response
   try { res = await fetch(`/api/v1${path}`, { credentials: 'same-origin', cache: 'no-store', ...options }) }
   catch (e) { if (options.signal?.aborted) throw e; throw new Error('无法连接服务器，请检查网络后重试。') }
   if (!res.ok) {
+    let code = ''
     let message = res.status === 401 ? '登录已过期，请重新登录。' : '操作未完成，请稍后重试。'
-    try { const body = await res.json(); if (typeof body.error?.message === 'string') message = body.error.message } catch { /* response may not be JSON */ }
-    throw new ApiError(res.status, message)
+    try { const body = await res.json(); if (typeof body.error?.message === 'string') message = body.error.message; if (typeof body.error?.code === 'string') code = body.error.code } catch { /* response may not be JSON */ }
+    throw new ApiError(res.status, message, code)
   }
   if (res.status === 204) return undefined as T
   return (await res.json() as Envelope<T>).data
@@ -22,6 +23,7 @@ export function useNodes(onUnauthenticated: () => void) {
   const path = ref<{ id: string; name: string }[]>([{ id: '0', name: '我的文件' }])
   const items = ref<NodeItem[]>([])
   const keyword = shallowRef('')
+  const sort = shallowRef<'name' | 'time' | 'size'>('name')
   const loading = shallowRef(false)
   const saving = shallowRef(false)
   const error = shallowRef('')
@@ -43,7 +45,7 @@ export function useNodes(onUnauthenticated: () => void) {
     const seq = ++generation, parentId = currentId.value
     loading.value = true; error.value = ''
     try {
-      const params = new URLSearchParams({ parentId, keyword: keyword.value, page: String(nextPage), pageSize: '50' })
+      const params = new URLSearchParams({ parentId, keyword: keyword.value, page: String(nextPage), pageSize: '50', sort: sort.value })
       const result = await request<Listing>(`/nodes?${params}`, { signal: controller.signal })
       if (!mounted || seq !== generation) return
       items.value = result.items; page.value = result.page; hasMore.value = result.hasMore
@@ -78,7 +80,9 @@ export function useNodes(onUnauthenticated: () => void) {
       })
       await load(page.value); return true
     } catch (e) {
-      dialogError.value = e instanceof ApiError && e.status === 412
+      dialogError.value = e instanceof ApiError && e.code === 'CONCURRENT_CHANGE'
+        ? '目录正在被其他操作修改，请关闭窗口并刷新列表后重试。'
+        : e instanceof ApiError && e.status === 412
         ? '文件已被其他操作修改，请关闭窗口并刷新列表后重试。'
         : handleError(e)
       return false
@@ -86,5 +90,5 @@ export function useNodes(onUnauthenticated: () => void) {
   }
   onMounted(() => { void load() })
   onBeforeUnmount(() => { mounted = false; pending?.abort() })
-  return { path, items, keyword, loading, saving, error, dialogError, page, hasMore, load, go, open, create, mutate }
+  return { path, items, keyword, sort, loading, saving, error, dialogError, page, hasMore, load, go, open, create, mutate }
 }

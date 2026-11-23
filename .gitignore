@@ -6,3 +6,6 @@ frontend/dist/
 .env.*
 !.env.example*.iml
 *.iml
+
+# Local Docker Compose runtime secrets
+deploy/secrets/

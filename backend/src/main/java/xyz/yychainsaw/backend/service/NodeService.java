@@ -3,7 +3,6 @@ package xyz.yychainsaw.backend.service;
 import java.text.Normalizer;
 import java.util.List;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import xyz.yychainsaw.backend.model.NdNode;
@@ -12,8 +11,7 @@ import xyz.yychainsaw.backend.repository.NdNodeMapper;
 @Service
 public class NodeService {
     private final NdNodeMapper nodes;
-    private final JdbcTemplate db;
-    public NodeService(NdNodeMapper nodes, JdbcTemplate db) { this.nodes = nodes; this.db = db; }
+    public NodeService(NdNodeMapper nodes) { this.nodes = nodes; }
 
     public static class Problem extends RuntimeException {
         public final int status;
@@ -72,28 +70,15 @@ public class NodeService {
         return nodes.findVisible(user,id);
     }
 
-    @Transactional
-    public void delete(long user, long id, long version) {
-        NdNode node = lockForChange(user, id, version);
-        if ("FOLDER".equals(node.getNodeType())) {
-            // Current locking reads see writes committed before this folder lock was obtained.
-            if (!db.queryForList("SELECT id FROM nd_node WHERE user_id=? AND parent_id=? LIMIT 1 FOR UPDATE",Long.class,user,id).isEmpty()
-                || !db.queryForList("SELECT id FROM nd_multipart_upload WHERE user_id=? AND parent_id=? AND status IN ('UPLOADING','FINALIZING') LIMIT 1 FOR UPDATE",String.class,user,id).isEmpty())
-                throw new Problem(409,"FOLDER_NOT_EMPTY","文件夹包含文件或有上传任务，不能删除");
-            db.update("DELETE FROM nd_node WHERE id=? AND user_id=? AND version=? AND status='READY'",id,user,version);
-            return;
-        }
-        if (!"FILE".equals(node.getNodeType()) || node.getStorageKey()==null) throw new Problem(409,"NODE_STATE","文件状态无效");
-        // Keep the logical node and its storage key until the collector has removed the object.
-        db.update("UPDATE nd_node SET status='DELETING',version=version+1 WHERE id=? AND user_id=? AND version=? AND status='READY'",id,user,version);
-        db.update("UPDATE nd_multipart_upload SET node_id=NULL WHERE user_id=? AND node_id=? AND status='COMPLETED'",user,id);
-        db.update("INSERT INTO nd_storage_gc(user_id,storage_key,reason,status,next_retry_at) VALUES (?,?,'NODE_DELETED','PENDING',CURRENT_TIMESTAMP)",user,node.getStorageKey());
-    }
     public List<NdNode> list(long user, long parent, String keyword, int pageSize, long offset) {
+        return list(user, parent, keyword, pageSize, offset, "name");
+    }
+    public List<NdNode> list(long user, long parent, String keyword, int pageSize, long offset, String sort) {
+        if (!java.util.Set.of("name", "time", "size").contains(sort)) throw invalid("排序方式无效");
         if (parent != 0 && nodes.findFolder(user, parent) == null) throw notFound();
         String query = Normalizer.normalize(keyword == null ? "" : keyword, Normalizer.Form.NFC);
         if (query.codePointCount(0, query.length()) > 191) throw invalid("搜索内容过长");
-        return nodes.list(user, parent, query, pageSize + 1, offset);
+        return nodes.list(user, parent, query, pageSize + 1, offset, sort);
     }
     @Transactional
     public NdNode create(long user, long parent, String rawName) {

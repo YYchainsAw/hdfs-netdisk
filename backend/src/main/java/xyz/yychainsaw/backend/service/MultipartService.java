@@ -15,7 +15,7 @@ import xyz.yychainsaw.backend.storage.HdfsStorage;
 @Service
 public class MultipartService {
     private static final int CHUNK = 8 * 1024 * 1024;
-    private static final long MAX_SIZE = 2L * 1024 * 1024 * 1024;
+    private static final long MAX_SIZE = UploadPolicy.MAX_SIZE_BYTES;
     private static final long DISK_RESERVE = 10L * 1024 * 1024 * 1024;
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
@@ -64,6 +64,7 @@ public class MultipartService {
                 if(!saved.equals(chunkHashes)) throw fail(409,"IDEMPOTENCY_CONFLICT","请求标识对应的文件摘要不同");
                 return str(row,"id");
             }
+            UploadPolicy.validateNewFileName(name);
             long active=db.queryForObject("SELECT COUNT(*) FROM nd_multipart_upload WHERE status IN ('UPLOADING','FINALIZING')",Long.class);
             long userActive=db.queryForObject("SELECT COUNT(*) FROM nd_multipart_upload WHERE user_id=? AND status IN ('UPLOADING','FINALIZING')",Long.class,user);
             long reserved=db.queryForObject("SELECT COALESCE(SUM(size_bytes),0) FROM nd_multipart_upload WHERE status IN ('UPLOADING','FINALIZING')",Long.class);
@@ -186,7 +187,7 @@ public class MultipartService {
             else if(nodes.lockFolder(user,parent)==null) throw fail(404,"NOT_FOUND","目录不存在");
             Long nodeId=row.get("node_id")==null?null:number(row.get("node_id"));
             if(nodeId==null) {
-                Long existing=db.queryForObject("SELECT COUNT(*) FROM nd_node WHERE user_id=? AND parent_id=? AND name=?",Long.class,user,parent,name);
+                Long existing=db.queryForObject("SELECT COUNT(*) FROM nd_node WHERE user_id=? AND parent_id=? AND active_name=?",Long.class,user,parent,name);
                 if(existing!=null && existing>0) {
                     if(resolution.equals("FAIL")) throw fail(409,"NAME_CONFLICT","当前目录已有同名文件或文件夹");
                     if(resolution.equals("SKIP")) {
@@ -196,13 +197,10 @@ public class MultipartService {
                     }
                     String original=name; int suffix=1;
                     do {
-                        String add=" ("+suffix+++ ")";
-                        int max=191-add.codePointCount(0,add.length());
-                        String base=original.codePointCount(0,original.length())>max?original.substring(0,original.offsetByCodePoints(0,max)):original;
-                        name=base+add;
-                        existing=db.queryForObject("SELECT COUNT(*) FROM nd_node WHERE user_id=? AND parent_id=? AND name=?",Long.class,user,parent,name);
+                        name=UploadPolicy.copyName(original,suffix++);
+                        existing=db.queryForObject("SELECT COUNT(*) FROM nd_node WHERE user_id=? AND parent_id=? AND active_name=?",Long.class,user,parent,name);
                     } while(existing!=null && existing>0 && suffix<=10000);
-                    if(suffix>10000) throw fail(409,"NAME_CONFLICT","无法生成可用名称");
+                    if(existing!=null && existing>0) throw fail(409,"NAME_CONFLICT","无法生成可用名称");
                 }
                 NdNode node=new NdNode(); node.setUserId(user); node.setParentId(parent); node.setName(name);
                 node.setNodeType("FILE"); node.setStatus("PENDING"); node.setSizeBytes(size); node.setStorageKey(finalKey); node.setVersion(1L);
@@ -229,7 +227,7 @@ public class MultipartService {
             tx.executeWithoutResult(s->{
                 int changed=db.update("UPDATE nd_multipart_upload SET status='COMPLETED',finalize_token=NULL,finalize_until=NULL WHERE id=? AND user_id=? AND finalize_token=? AND status='FINALIZING' AND finalize_until>UTC_TIMESTAMP(3)",id,user,token);
                 if(changed!=1) throw fail(409,"LEASE_EXPIRED","合并已失效，请重试");
-                int nodesChanged=db.update("UPDATE nd_node SET status='READY',sha256=? WHERE id=? AND user_id=? AND status='PENDING' AND storage_key=?",hash,number(row.get("node_id")),user,finalKey);
+                int nodesChanged=db.update("UPDATE nd_node SET status='READY',sha256=?,created_at=UTC_TIMESTAMP(3) WHERE id=? AND user_id=? AND status='PENDING' AND storage_key=?",hash,number(row.get("node_id")),user,finalKey);
                 if(nodesChanged!=1) throw fail(409,"UPLOAD_STATE","文件状态已改变");
                 for(var p:parts) db.update("INSERT IGNORE INTO nd_storage_gc(user_id,storage_key,reason,status,next_retry_at) VALUES (?,?,'ORPHAN','PENDING',DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 1 DAY))",user,str(p,"object_key"));
             });

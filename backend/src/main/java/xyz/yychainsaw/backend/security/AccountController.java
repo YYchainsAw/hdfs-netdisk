@@ -76,8 +76,8 @@ public class AccountController {
     @GetMapping("/usage")
     public ResponseEntity<?> usage(Authentication auth) {
         long id=user(auth);
-        var used=nodes.sumReadyFileBytes(id);
-        long count=nodes.countReadyFiles(id);
+        var used=nodes.sumRetainedFileBytes(id);
+        long count=nodes.countRetainedFiles(id);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(Map.of("data",Map.of(
             "usedBytes",used.toBigIntegerExact().toString(),"fileCount",Long.toString(count))));
     }
