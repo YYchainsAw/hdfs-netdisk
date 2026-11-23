@@ -1,0 +1,7 @@
+# File type policy and timestamp regression
+
+The service applies its allowed extensions to new upload tasks while preserving an existing task's immutable manifest and allowing it to resume. The application identifies the extension from the final filename suffix and does not inspect file contents or scan for malware. Historical files with names outside the new policy remain downloadable; fixture names in these suites use `.txt` because they exercise general upload behavior rather than content type verification.
+
+On 2026-11-23, using an isolated MySQL 8.4 container, random HDFS directories and an isolated backend lock, the updated `integration-qa`, `reliability-extra`, and 32 MiB plus 3 x 16 MiB `performance-qa` test harnesses passed. The independent combined policy suite passed two tests, and a browser test against an isolated service verified policy responses, rejecting `.exe`, file creation time, same-name copy extension preservation, downloaded bytes, an existing legacy upload resuming, and mobile layout. Temporary test data and containers were removed.
+
+This run did not rerun the optional 128 MiB hard-kill crash mode; crash fixture names were updated and the script was syntax checked. The small performance result is one local isolated sample, not a public-network or capacity guarantee. The earlier 2 GiB benchmark was run against a prior revision and is not a measurement of this policy revision.

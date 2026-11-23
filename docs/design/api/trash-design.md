@@ -1,0 +1,7 @@
+# Recycle bin behavior and deployment
+
+Deleting a file or directory moves its READY subtree to a logical recycle group; the limit is 1000 nodes per operation. The recycle view lists only each deleted root. Restoring brings the complete group back to its original parent; a missing parent or an active same-name node causes a conflict and leaves the group unchanged. A directory with active uploads, separately trashed descendants or objects still being removed cannot be trashed until they are handled. Concurrent changes may cause a 409 response; refresh and retry intentionally.
+
+Permanent deletion is irreversible. It changes files to DELETING and enqueues server-generated object keys for the existing HDFS garbage collector, which retries failures. Used space includes READY, TRASHED and DELETING file sizes, excluding temporary upload pieces; there is no per-user persistent storage quota.
+
+`trash-schema.sql` is a one-time MySQL 8 migration that changes the active-name uniqueness rule. Stop backend writes and take a verified full database backup before executing it. MySQL DDL is not an all-or-nothing deployment transaction. Inspect the actual schema on failure; do not blindly re-run, delete or rebuild the database. Once recycle entries or reused names exist, the previous backend and previous unique index are not safe rollback targets. Keep all data and repair forward; only revert before users can write and after verifying no recycle data or duplicate names exist. Back up HDFS data separately and rehearse recovery.

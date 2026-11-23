@@ -10,11 +10,11 @@ import xyz.yychainsaw.backend.model.NdNode;
 
 @Mapper
 public interface NdNodeMapper extends BaseMapper<NdNode> {
-    @Select("SELECT COALESCE(SUM(size_bytes),0) FROM nd_node WHERE user_id=#{userId} AND node_type='FILE' AND status='READY'")
-    java.math.BigDecimal sumReadyFileBytes(@Param("userId") long userId);
+    @Select("SELECT COALESCE(SUM(size_bytes),0) FROM nd_node WHERE user_id=#{userId} AND node_type='FILE' AND status IN ('READY','TRASHED','DELETING')")
+    java.math.BigDecimal sumRetainedFileBytes(@Param("userId") long userId);
 
-    @Select("SELECT COUNT(*) FROM nd_node WHERE user_id=#{userId} AND node_type='FILE' AND status='READY'")
-    long countReadyFiles(@Param("userId") long userId);
+    @Select("SELECT COUNT(*) FROM nd_node WHERE user_id=#{userId} AND node_type='FILE' AND status IN ('READY','TRASHED','DELETING')")
+    long countRetainedFiles(@Param("userId") long userId);
 
     @Select("SELECT id FROM nd_user WHERE id = #{userId} AND status = 'ACTIVE' FOR UPDATE")
     Long lockOwner(@Param("userId") long userId);
@@ -36,7 +36,9 @@ public interface NdNodeMapper extends BaseMapper<NdNode> {
 
     @Select("SELECT * FROM nd_node WHERE user_id = #{userId} AND parent_id = #{parentId} AND status = 'READY' "
         + "AND (#{keyword} = '' OR LOCATE(#{keyword}, name) > 0) "
-        + "ORDER BY CASE WHEN node_type = 'FOLDER' THEN 0 ELSE 1 END, name, id LIMIT #{limit} OFFSET #{offset}")
+        + "ORDER BY CASE WHEN node_type = 'FOLDER' THEN 0 ELSE 1 END, "
+        + "CASE WHEN #{sort} = 'time' THEN created_at END DESC, "
+        + "CASE WHEN #{sort} = 'size' THEN size_bytes END DESC, name, id LIMIT #{limit} OFFSET #{offset}")
     List<NdNode> list(@Param("userId") long userId, @Param("parentId") long parentId,
-        @Param("keyword") String keyword, @Param("limit") int limit, @Param("offset") long offset);
+        @Param("keyword") String keyword, @Param("limit") int limit, @Param("offset") long offset, @Param("sort") String sort);
 }

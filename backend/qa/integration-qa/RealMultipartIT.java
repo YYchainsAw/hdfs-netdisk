@@ -74,7 +74,7 @@ class RealMultipartIT {
     private HttpResponse<byte[]> put(Session s,Upload u,byte[] data,String sha) throws Exception { return send(s,"PUT","uploads/"+u.id()+"/chunks/0",data,"application/octet-stream",sha); }
     private HttpResponse<byte[]> complete(Session s,Upload u,String resolution) throws Exception { return json(s,"uploads/"+u.id()+"/complete","{\"resolution\":\""+resolution+"\"}"); }
     private HttpResponse<byte[]> createSmall(Session s,String request) throws Exception {
-        String body="{\"parentId\":\"0\",\"name\":\"limit-"+request+"\",\"sizeBytes\":1,\"requestId\":\""+request+"\",\"chunkHashes\":[\""+digest(new byte[]{1})+"\"]}";
+        String body="{\"parentId\":\"0\",\"name\":\"limit-"+request+".txt\",\"sizeBytes\":1,\"requestId\":\""+request+"\",\"chunkHashes\":[\""+digest(new byte[]{1})+"\"]}";
         return json(s,"uploads",body);
     }
     @Test void actualHdfsAndMysql() throws Exception {
@@ -83,7 +83,7 @@ class RealMultipartIT {
         db.update("INSERT INTO nd_user(id,username,password_hash,status) VALUES(?,?,?,'ACTIVE')",charlie,"charlie",encoder.encode("integration-password"));
         Session a=login("alice"), b=login("bob"), c=login("charlie");
         byte[] bytes=new byte[1024*1024+13]; new Random(55).nextBytes(bytes);
-        Upload u=create(a,"sample.bin",bytes);
+        Upload u=create(a,"sample.txt",bytes);
         assertEquals(404,send(b,"GET","uploads/"+u.id(),null,null,null).statusCode());
         assertEquals(409,put(a,u,bytes,"0".repeat(64)).statusCode());
         assertEquals(204,put(a,u,bytes,u.sha()).statusCode());
@@ -95,7 +95,7 @@ class RealMultipartIT {
         var content=send(a,"GET","nodes/"+node+"/content",null,null,null);
         assertEquals(200,content.statusCode(),text(content)); assertArrayEquals(bytes,content.body());
         assertEquals(404,send(b,"GET","nodes/"+node+"/content",null,null,null).statusCode());
-        var first=create(a,"conflict.bin",bytes); var second=create(a,"conflict.bin",bytes);
+        var first=create(a,"conflict.txt",bytes); var second=create(a,"conflict.txt",bytes);
         assertEquals(204,put(a,first,bytes,first.sha()).statusCode()); assertEquals(204,put(a,second,bytes,second.sha()).statusCode());
         var gate=new CountDownLatch(1); var pool=Executors.newFixedThreadPool(2);
         try {
@@ -109,11 +109,11 @@ class RealMultipartIT {
             if(loserStatus==429) assertEquals(409,complete(a,loser,"FAIL").statusCode());
             assertEquals(200,complete(a,loser,"KEEP_BOTH").statusCode());
         } finally { pool.shutdownNow(); }
-        assertEquals(2,db.queryForObject("SELECT COUNT(*) FROM nd_node WHERE user_id=? AND status='READY' AND name LIKE 'conflict.bin%'",Integer.class,alice));
+        assertEquals(2,db.queryForObject("SELECT COUNT(*) FROM nd_node WHERE user_id=? AND status='READY' AND name IN ('conflict.txt','conflict (1).txt')",Integer.class,alice));
         byte[] firstChunk=new byte[8*1024*1024], secondChunk=new byte[113];
         new Random(73).nextBytes(firstChunk); new Random(74).nextBytes(secondChunk);
         String firstHash=digest(firstChunk), secondHash=digest(secondChunk), request=UUID.randomUUID().toString();
-        String create="{\"parentId\":\"0\",\"name\":\"resumed.bin\",\"sizeBytes\":"+(firstChunk.length+secondChunk.length)+",\"requestId\":\""+request+"\",\"chunkHashes\":[\""+firstHash+"\",\""+secondHash+"\"]}";
+        String create="{\"parentId\":\"0\",\"name\":\"resumed.txt\",\"sizeBytes\":"+(firstChunk.length+secondChunk.length)+",\"requestId\":\""+request+"\",\"chunkHashes\":[\""+firstHash+"\",\""+secondHash+"\"]}";
         var initial=json(a,"uploads",create); assertEquals(200,initial.statusCode(),text(initial));
         String multipartId=db.queryForObject("SELECT id FROM nd_multipart_upload WHERE request_id=?",String.class,request);
         assertEquals(204,send(a,"PUT","uploads/"+multipartId+"/chunks/0",firstChunk,"application/octet-stream",firstHash).statusCode());
@@ -133,7 +133,7 @@ class RealMultipartIT {
         assertTrue(storage.exists(completedChunk)); assertTrue(storage.exists(completedFile));
         db.update("UPDATE nd_storage_gc SET next_retry_at=DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND) WHERE storage_key=?",completedChunk);
         gc.collect(); assertFalse(storage.exists(completedChunk)); assertTrue(storage.exists(completedFile));
-        Upload active=create(a,"active.bin",bytes);
+        Upload active=create(a,"active.txt",bytes);
         assertEquals(204,put(a,active,bytes,active.sha()).statusCode());
         String activeKey=db.queryForObject("SELECT object_key FROM nd_multipart_part WHERE upload_id=? AND part_no=0",String.class,active.id());
         db.update("INSERT IGNORE INTO nd_storage_gc(user_id,storage_key,reason,status,next_retry_at) VALUES (?,?,'ORPHAN','PENDING',DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 SECOND))",alice,activeKey);
@@ -142,7 +142,7 @@ class RealMultipartIT {
         gc.unlockProcess(); gc.lockProcess();
         assertEquals(204,put(a,active,bytes,active.sha()).statusCode(),"startup must release an interrupted writer lease");
         assertEquals(200,complete(a,active,"FAIL").statusCode());
-        Upload cancelled=create(a,"cancelled.bin",bytes);
+        Upload cancelled=create(a,"cancelled.txt",bytes);
         assertEquals(204,put(a,cancelled,bytes,cancelled.sha()).statusCode());
         assertEquals(404,json(b,"uploads/"+cancelled.id()+"/cancel","{}").statusCode());
         assertEquals(200,json(a,"uploads/"+cancelled.id()+"/cancel","{}").statusCode());
@@ -181,9 +181,9 @@ class RealMultipartIT {
         HdfsStorage low=org.mockito.Mockito.spy(storage);
         org.mockito.Mockito.doReturn(0L).when(low).remaining();
         var lowService=new MultipartService(db,tx,nodes,low,"/netdisk/temp/"+System.getenv("NETDISK_QA_ROOT"),"/netdisk/users/"+System.getenv("NETDISK_QA_ROOT"));
-        var lowCreate=assertThrows(NodeService.Problem.class,()->lowService.create(alice,"0","low.bin",bytes.length,UUID.randomUUID().toString(),List.of(digest(bytes))));
+        var lowCreate=assertThrows(NodeService.Problem.class,()->lowService.create(alice,"0","low.txt",bytes.length,UUID.randomUUID().toString(),List.of(digest(bytes))));
         assertEquals(507,lowCreate.status);
-        Upload lowJob=create(a,"capacity-check.bin",bytes);
+        Upload lowJob=create(a,"capacity-check.txt",bytes);
         var lowWrite=assertThrows(NodeService.Problem.class,()->lowService.put(alice,lowJob.id(),0,lowJob.sha(),bytes.length,new ByteArrayInputStream(bytes)));
         assertEquals(507,lowWrite.status); assertEquals(204,put(a,lowJob,bytes,lowJob.sha()).statusCode());
         var lowComplete=assertThrows(NodeService.Problem.class,()->lowService.complete(alice,lowJob.id(),"FAIL"));

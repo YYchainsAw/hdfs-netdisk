@@ -45,7 +45,7 @@ export function useUpload(userId: string, onExpired: () => void, onComplete: (pa
   function fail(e: unknown) {
     if (!alive || controller?.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
     if (e instanceof ApiError && e.status === 401) { onExpired(); return }
-    phase.value = 'failed'; message.value = e instanceof Error ? e.message : '上传失败，请重试。'
+    phase.value = 'failed'; message.value = e instanceof ApiError && e.code === 'CONCURRENT_CHANGE' ? '目录正在被其他操作修改，上传任务已保留，请稍后重试。' : e instanceof Error ? e.message : '上传失败，请重试。'
   }
   async function retryChunk(task: UploadState, index: number, file: File) {
     const requestSignal = signal()
@@ -177,10 +177,3 @@ export function useUpload(userId: string, onExpired: () => void, onComplete: (pa
   onBeforeUnmount(() => { alive = false; controller?.abort() })
   return { saved, phase, message, progress, hasSelected, start, resume, retry, resolve, cancel }
 }
-
-
-
-
-
-
-

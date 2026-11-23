@@ -14,19 +14,32 @@ task_dir=$(mktemp -d /tmp/netdisk-multipart-it.XXXXXX)
 case "$task_dir" in /tmp/netdisk-multipart-it.??????) ;; *) exit 3 ;; esac
 container="netdisk-multipart-it-${task_dir##*.}"
 app_pid=''
+container_created=0
+paths_owned=0
 cleanup() {
   if [ -n "$app_pid" ]; then kill "$app_pid" >/dev/null 2>&1 || true; wait "$app_pid" 2>/dev/null || true; fi
-  docker rm -fv "$container" >/dev/null 2>&1 || true
+  if [ "$container_created" = 1 ]; then docker rm -fv "$container" >/dev/null 2>&1 || true; fi
+  rm -f -- "/tmp/netdisk-fileops-${qa_root}.lock"
   local path
-  for path in "/netdisk/temp/$qa_root" "/netdisk/users/$qa_root"; do
-    sudo -u hdfs env JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 /opt/hadoop/bin/hdfs dfs -rm -r -skipTrash "$path" >/dev/null 2>&1 || true
-  done
+  if [ "$paths_owned" = 1 ]; then
+    for path in "/netdisk/temp/$qa_root" "/netdisk/users/$qa_root"; do
+      sudo -u hdfs env JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 /opt/hadoop/bin/hdfs dfs -rm -r -skipTrash "$path" >/dev/null 2>&1 || true
+    done
+  fi
   rm -rf -- "$task_dir"
 }
 trap cleanup EXIT
+if docker container inspect "$container" >/dev/null 2>&1; then echo 'Test container name already exists' >&2; exit 3; fi
+for path in "/netdisk/temp/$qa_root" "/netdisk/users/$qa_root"; do
+  if sudo -u hdfs env JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 /opt/hadoop/bin/hdfs dfs -test -e "$path"; then
+    echo 'Test HDFS path already exists' >&2; exit 3
+  fi
+done
+paths_owned=1
 qa_password=$(openssl rand -hex 32)
 printf 'MYSQL_ROOT_PASSWORD=%s\nMYSQL_ROOT_HOST=%%\nMYSQL_DATABASE=netdisk_qa\n' "$qa_password" > "$task_dir/docker.env"
 docker run -d --name "$container" --network bridge --memory 640m --cpus 1 -p 127.0.0.1::3306 --env-file "$task_dir/docker.env" mysql:8.4 --innodb-buffer-pool-size=64M --performance-schema=OFF >/dev/null
+container_created=1
 for i in $(seq 1 70); do
   if docker exec "$container" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h127.0.0.1 -uroot -e "SELECT 1" >/dev/null 2>&1' 2>/dev/null; then break; fi
   if [ "$i" = 70 ]; then echo 'Isolated MySQL failed to start'; exit 4; fi
@@ -37,7 +50,14 @@ cp -- "$multipart_schema" "$task_dir/multipart-schema.sql"
 docker exec -i "$container" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --default-character-set=utf8mb4 netdisk_qa' < "$project_root/docs/design/database/schema.sql"
 docker exec -i "$container" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --default-character-set=utf8mb4 netdisk_qa' < "$project_root/docs/design/api/migration-upload.sql"
 docker exec -i "$container" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --default-character-set=utf8mb4 netdisk_qa' < "$task_dir/multipart-schema.sql"
+docker exec -i "$container" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --default-character-set=utf8mb4 netdisk_qa' < "$project_root/docs/design/api/trash-schema.sql"
+docker exec -i "$container" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --default-character-set=utf8mb4 netdisk_qa' < "$project_root/docs/design/api/share-schema.sql"
 cp -a "$backend_src" "$task_dir/project"
+gc_source="$task_dir/project/src/main/java/xyz/yychainsaw/backend/service/MultipartGarbageCollector.java"
+grep -qF '/run/lock/netdisk-multipart.lock' "$gc_source" || { echo 'Expected production lock path not found' >&2; exit 3; }
+sed -i "s@/run/lock/netdisk-multipart.lock@/tmp/netdisk-fileops-${qa_root}.lock@" "$gc_source"
+grep -qF "/tmp/netdisk-fileops-${qa_root}.lock" "$gc_source" || { echo 'Isolated lock substitution failed' >&2; exit 3; }
+
 mkdir -p "$task_dir/project/src/main/java/xyz/yychainsaw/backend/storage"
 mkdir -p "$task_dir/project/src/main/java/xyz/yychainsaw/backend/controller"
 mkdir -p "$task_dir/project/src/main/java/xyz/yychainsaw/backend/repository"
