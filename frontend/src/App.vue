@@ -1,47 +1,15 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
-import TheWelcome from './components/TheWelcome.vue'
+import { shallowRef } from 'vue'
+import LoginView from './components/LoginView.vue'
+import DriveView from './components/DriveView.vue'
+import AccountView from './components/AccountView.vue'
+import { useAuth } from './composables/useAuth'
+const demo = shallowRef(false)
+const { user, busy, checking, error, login, logout, expire } = useAuth()
 </script>
 
 <template>
-  <header>
-    <img alt="Vue logo" class="logo" src="./assets/logo.svg" width="125" height="125" />
-
-    <div class="wrapper">
-      <HelloWorld msg="You did it!" />
-    </div>
-  </header>
-
-  <main>
-    <TheWelcome />
-  </main>
+  <DriveView v-if="demo" @exit="demo = false" />
+  <AccountView v-else-if="user" :user="user" :busy="busy" :error="error" @logout="logout" @expired="expire()" @password-changed="expire('密码已修改，请重新登录。')" />
+  <LoginView v-else :busy="busy || checking" :error="error" @enter="demo = true" @login="login" />
 </template>
-
-<style scoped>
-header {
-  line-height: 1.5;
-}
-
-.logo {
-  display: block;
-  margin: 0 auto 2rem;
-}
-
-@media (min-width: 1024px) {
-  header {
-    display: flex;
-    place-items: center;
-    padding-right: calc(var(--section-gap) / 2);
-  }
-
-  .logo {
-    margin: 0 2rem 0 0;
-  }
-
-  header .wrapper {
-    display: flex;
-    place-items: flex-start;
-    flex-wrap: wrap;
-  }
-}
-</style>
