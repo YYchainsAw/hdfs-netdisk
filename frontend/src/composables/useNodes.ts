@@ -14,6 +14,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     try { const body = await res.json(); if (typeof body.error?.message === 'string') message = body.error.message } catch { /* response may not be JSON */ }
     throw new ApiError(res.status, message)
   }
+  if (res.status === 204) return undefined as T
   return (await res.json() as Envelope<T>).data
 }
 
@@ -64,7 +65,26 @@ export function useNodes(onUnauthenticated: () => void) {
     } catch (e) { dialogError.value = handleError(e); return false }
     finally { saving.value = false }
   }
+  async function mutate(node: NodeItem, operation: 'rename' | 'delete', name?: string): Promise<boolean> {
+    if (saving.value) return false
+    saving.value = true; dialogError.value = ''
+    try {
+      const { csrfToken } = await request<{ csrfToken: string }>('/auth/csrf')
+      const path = `/nodes/${encodeURIComponent(node.id)}${operation === 'rename' ? '/name' : ''}`
+      await request(path, {
+        method: operation === 'rename' ? 'PATCH' : 'DELETE',
+        headers: { 'X-CSRF-TOKEN': csrfToken, 'If-Match': `"v${node.version}"`, ...(operation === 'rename' ? { 'Content-Type': 'application/json' } : {}) },
+        ...(operation === 'rename' ? { body: JSON.stringify({ name }) } : {}),
+      })
+      await load(page.value); return true
+    } catch (e) {
+      dialogError.value = e instanceof ApiError && e.status === 412
+        ? '文件已被其他操作修改，请关闭窗口并刷新列表后重试。'
+        : handleError(e)
+      return false
+    } finally { saving.value = false }
+  }
   onMounted(() => { void load() })
   onBeforeUnmount(() => { mounted = false; pending?.abort() })
-  return { path, items, keyword, loading, saving, error, dialogError, page, hasMore, load, go, open, create }
+  return { path, items, keyword, loading, saving, error, dialogError, page, hasMore, load, go, open, create, mutate }
 }

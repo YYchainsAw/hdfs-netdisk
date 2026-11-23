@@ -10,6 +10,6 @@ const { user, busy, checking, error, login, logout, expire } = useAuth()
 
 <template>
   <DriveView v-if="demo" @exit="demo = false" />
-  <AccountView v-else-if="user" :user="user" :busy="busy" :error="error" @logout="logout" @expired="expire" />
+  <AccountView v-else-if="user" :user="user" :busy="busy" :error="error" @logout="logout" @expired="expire()" @password-changed="expire('密码已修改，请重新登录。')" />
   <LoginView v-else :busy="busy || checking" :error="error" @enter="demo = true" @login="login" />
 </template>

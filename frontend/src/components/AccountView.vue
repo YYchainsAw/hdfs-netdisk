@@ -1,32 +1,52 @@
 <script setup lang="ts">
 import { nextTick, shallowRef } from 'vue'
 import type { AuthUser } from '../composables/useAuth'
-import { useNodes } from '../composables/useNodes'
+import { useNodes, type NodeItem } from '../composables/useNodes'
 import RealFileList from './RealFileList.vue'
 import FolderDialog from './FolderDialog.vue'
 import UploadPanel from './UploadPanel.vue'
+import NodeActionDialog from './NodeActionDialog.vue'
+import PasswordDialog from './PasswordDialog.vue'
+import UsageSummary from './UsageSummary.vue'
 defineProps<{ user: AuthUser; busy: boolean; error: string }>()
-const emit = defineEmits<{ logout: []; expired: [] }>()
-const { path, items, keyword, loading, saving, error: listError, dialogError, page, hasMore, load, go, open, create } = useNodes(() => emit('expired'))
+const emit = defineEmits<{ logout: []; expired: []; 'password-changed': [] }>()
+const { path, items, keyword, loading, saving, error: listError, dialogError, page, hasMore, load, go, open, create, mutate } = useNodes(() => emit('expired'))
 const dialog = shallowRef(false)
+const passwordDialog = shallowRef(false)
+const action = shallowRef<{node: NodeItem; mode: 'rename' | 'delete'} | null>(null)
+const usageRefresh = shallowRef(0)
 const notice = shallowRef('')
 let returnFocus: HTMLElement | null = null
 function showDialog() { returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null; dialogError.value = ''; dialog.value = true }
 function closeDialog() { if (saving.value) return; dialog.value = false; void nextTick(() => returnFocus?.focus()) }
 async function createFolder(name: string) { if (await create(name)) { dialog.value = false; notice.value = '文件夹已创建'; void nextTick(() => returnFocus?.focus()) } }
 function search() { notice.value = ''; void load() }
+function showPassword() { returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null; passwordDialog.value = true }
+function closePassword() { passwordDialog.value = false; void nextTick(() => returnFocus?.focus()) }
+function showAction(node: NodeItem, mode: 'rename' | 'delete') { returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null; dialogError.value = ''; action.value = {node,mode} }
+function closeAction() { if (saving.value) return; action.value = null; void nextTick(() => returnFocus?.focus()) }
+async function doAction(name?: string) {
+  if (!action.value) return
+  const current = action.value
+  if (await mutate(current.node,current.mode,name)) {
+    action.value = null
+    notice.value = current.mode === 'delete' ? '已从列表移除；后台清理期间原名称可能暂时不可用。' : '名称已修改。'
+    if (current.mode === 'delete') usageRefresh.value++
+    void nextTick(() => returnFocus?.focus())
+  }
+}
 </script>
 <template>
   <div class="workspace">
     <aside class="sidebar"><div class="logo"><span class="logo-mark">☁</span><span><b>云屿</b><small>个人文件空间</small></span></div><div class="nav-label">WORKSPACE</div><button class="nav-item" @click="go(0)"><span class="folder-symbol">▱</span>我的文件 <span class="arrow">›</span></button><div class="side-note"><b><i></i>文件空间</b><p>按文件夹整理，让重要的资料都有位置。</p></div></aside>
-    <div class="main-column"><header class="topbar"><span>个人空间 <span class="slash">/</span> 我的文件</span><div class="top-right"><span class="avatar">{{ user.username.slice(0,1).toUpperCase() }}</span><span class="username">{{ user.username }}</span><button class="logout" :disabled="busy" @click="$emit('logout')">{{ busy ? '退出中…' : '退出登录' }}</button></div></header>
+    <div class="main-column"><header class="topbar"><span>个人空间 <span class="slash">/</span> 我的文件</span><div class="top-right"><span class="avatar">{{ user.username.slice(0,1).toUpperCase() }}</span><span class="username">{{ user.username }}</span><button class="logout" :disabled="busy" @click="showPassword">修改密码</button><button class="logout" :disabled="busy" @click="$emit('logout')">{{ busy ? '退出中…' : '退出登录' }}</button></div></header>
       <main class="content"><div class="intro"><div><span class="eyebrow">YOUR PERSONAL SPACE</span><h1>我的文件<span>.</span></h1><p>把每一份重要，都放在合适的位置。</p></div><div class="actions"><button class="secondary" @click="showDialog">＋ 新建文件夹</button></div></div>
-        <UploadPanel :user-id="user.id" :parent-id="path[path.length - 1]!.id" @expired="emit('expired')" @uploaded="id => { if (id === path[path.length - 1]!.id) void load() }" />
-        <section class="files" aria-label="文件列表"><div class="card-head"><div><div class="card-title">文件空间</div><nav class="crumbs" aria-label="当前路径"><template v-for="(crumb,index) in path" :key="crumb.id"><span v-if="index">/</span><button :disabled="loading || saving" @click="go(index)">{{ crumb.name }}</button></template></nav></div><form class="search" @submit.prevent="search"><span aria-hidden="true">⌕</span><input v-model="keyword" type="search" aria-label="搜索当前文件夹" placeholder="搜索当前文件夹" /><button type="submit" :disabled="loading">搜索</button></form></div>
-          <div v-if="listError" class="list-error" role="alert">{{ listError }} <button @click="load(page)">重试</button></div><RealFileList v-else :items="items" :loading="loading" :keyword="keyword" @open="open" />
+        <UploadPanel :user-id="user.id" :parent-id="path[path.length - 1]!.id" @expired="emit('expired')" @uploaded="id => { usageRefresh++; if (id === path[path.length - 1]!.id) void load() }" />
+        <UsageSummary :refresh="usageRefresh" @expired="emit('expired')" /><section class="files" aria-label="文件列表"><div class="card-head"><div><div class="card-title">文件空间</div><nav class="crumbs" aria-label="当前路径"><template v-for="(crumb,index) in path" :key="crumb.id"><span v-if="index">/</span><button :disabled="loading || saving" @click="go(index)">{{ crumb.name }}</button></template></nav></div><form class="search" @submit.prevent="search"><span aria-hidden="true">⌕</span><input v-model="keyword" type="search" aria-label="搜索当前文件夹" placeholder="搜索当前文件夹" /><button type="submit" :disabled="loading">搜索</button></form></div>
+          <div v-if="listError" class="list-error" role="alert">{{ listError }} <button @click="load(page)">重试</button></div><RealFileList v-else :items="items" :loading="loading" :keyword="keyword" @open="open" @action="showAction" />
           <footer class="footer"><span>第 {{ page }} 页 · {{ items.length }} 项</span><div class="pagination"><button :disabled="page <= 1 || loading" @click="load(page - 1)">上一页</button><button :disabled="!hasMore || loading" @click="load(page + 1)">下一页</button></div></footer>
         </section><p v-if="notice" class="notice" role="status">{{ notice }}</p><p v-if="error" class="error" role="alert">{{ error }}</p><div class="below">YOUR FILES, YOUR SPACE <span>让整理变得简单一点 ✦</span></div>
-      </main></div><FolderDialog v-if="dialog" :busy="saving" :error="dialogError" @cancel="closeDialog" @create="createFolder" />
+      </main></div><FolderDialog v-if="dialog" :busy="saving" :error="dialogError" @cancel="closeDialog" @create="createFolder" /><NodeActionDialog v-if="action" :node="action.node" :mode="action.mode" :busy="saving" :error="dialogError" @cancel="closeAction" @submit="doAction" /><PasswordDialog v-if="passwordDialog" @cancel="closePassword" @expired="emit('expired')" @changed="emit('password-changed')" />
   </div>
 </template>
 <style scoped>
